@@ -47,6 +47,16 @@ gtkwave wave.vcd
 - GTKWave
 ```
 
+## Timing Verification
+
+Timing was verified using Quartus TimeQuest Timing Analyzer.
+
+- Clock constraint: 25 MHz (40 ns period)
+- Setup slack: Positive
+- Hold slack: Positive
+
+The constraint was chosen based on system requirements (UART-limited data rate), ensuring reliable operation without unnecessary resource overhead.
+
 ## Motivation
 
 This project was built as a low-cost alternative to commercial logic analyzers like SignalTap/ILA.
