@@ -16,8 +16,7 @@ Capture → Circular Buffer → Trigger → UART → Python → VCD → GTKWave
 
 ## Waveform Output
 
-
-
+<img width="999" height="635" alt="waveform" src="https://github.com/user-attachments/assets/2fe5ecb3-c28e-495e-900f-49349c2f585c" />
 
 ## How it works
 
