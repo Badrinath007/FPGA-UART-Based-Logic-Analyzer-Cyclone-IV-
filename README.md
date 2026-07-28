@@ -1,8 +1,8 @@
 # FPGA-Based Logic Analyzer — Cyclone IV (EP4CE)
 
-A hardware logic analyzer implemented entirely in RTL Verilog on an Intel Cyclone IV FPGA. Designed as a low-cost, open alternative to commercial tools like SignalTap and Xilinx ILA — with real-time signal capture, trigger-based acquisition, UART streaming, and waveform visualization via GTKWave.
+A hardware logic analyzer implemented in RTL Verilog on an Intel Cyclone IV FPGA. Designed as a low-cost, open alternative to commercial tools like SignalTap and Xilinx ILA — with real-time signal capture, trigger-based acquisition, UART streaming, and waveform visualization via GTKWave.
 
-> Built to solve a real problem: debugging embedded signal behavior without access to expensive lab equipment.
+> Built to explore signal capture and debugging without access to expensive lab equipment.
 
 ---
 
@@ -11,10 +11,9 @@ A hardware logic analyzer implemented entirely in RTL Verilog on an Intel Cyclon
 | Parameter | Value |
 |---|---|
 | Platform | Intel Cyclone IV (EP4CE6E22C8N) |
-| Clock Constraint | 25 MHz (40 ns period) |
-| Timing Status | Setup ✅ Hold ✅ (Timing Analyzer verified) |
+| Target Clock | 25 MHz (design intent, not timing-closure-verified) |
 | Interface | UART (hardware UART — no soft IP) |
-| Waveform Output | VCD → GTKWave/ Modelsim |
+| Waveform Output | VCD → GTKWave / Modelsim |
 | RTL Language | Verilog |
 | Toolchain | Quartus Prime, GTKWave, Python 3, Modelsim |
 
@@ -23,21 +22,21 @@ A hardware logic analyzer implemented entirely in RTL Verilog on an Intel Cyclon
 ## Architecture
 
 ```
-Signal Input → Circular Buffer (RTL) → FSM Trigger Logic → UART TX → Python Host → VCD → GTKWave
+Signal Input → Circular Buffer (RTL) → Trigger/Capture Control Logic → UART TX → Python Host → VCD → GTKWave
 ```
 
 ### RTL Design Blocks
 
-- **Circular Buffer** — Continuous signal capture using a ring buffer with configurable depth. Allows pre-trigger and post-trigger data retention without gaps.
-- **Trigger FSM** — Finite state machine monitors incoming signal for a user-defined trigger condition. Once triggered, captures a fixed post-trigger window then halts.
-- **UART Transmitter** — Streams captured buffer contents serially to the host machine at a baud rate matched to the 25 MHz system clock.
-- **Python Host Script** — Receives UART data, reconstructs sample timing, and generates a standards-compliant `.vcd` file.
+- **Circular Buffer** — Continuous signal capture using a ring buffer with configurable depth (parameterized `DEPTH`). Intended to allow pre-trigger and post-trigger data retention.
+- **Capture Control Logic** — Flag-based control (`capturing`, `triggered`, `sending`) that monitors incoming signal for a user-defined trigger value, then captures a fixed post-trigger window before halting. Note: this is implemented as flag-driven sequential logic, not a formally encoded state machine.
+- **UART Transmitter** — Streams captured buffer contents serially to the host machine.
+- **Python Host Script** — Receives UART data, reconstructs sample timing, and generates a `.vcd` file.
 
 ---
 
 ## Waveform Output
 
-Captured waveform visualized in GTKWave from a live FPGA capture:
+Sample waveform from GTKWave:
 
 ![Waveform Output](https://github.com/user-attachments/assets/2fe5ecb3-c28e-495e-900f-49349c2f585c)
 
@@ -46,28 +45,22 @@ Captured waveform visualized in GTKWave from a live FPGA capture:
 ## Design Decisions & Engineering Rationale
 
 **Why a circular buffer?**
-A circular buffer allows continuous capture without stalling the signal pipeline. Pre-trigger data is preserved automatically — critical for debugging transient conditions that occur before a trigger event.
+A circular buffer allows continuous capture without stalling the signal pipeline, with the intent of preserving pre-trigger data for debugging transient conditions.
 
 **Why UART instead of JTAG/USB-FIFO?**
-UART keeps the BOM cost at zero — any CP2102 or CH340 USB-UART adapter works. The tradeoff is bandwidth, which is acceptable given the 25 MHz sample rate and post-capture streaming model.
-
-**Why 25 MHz clock constraint?**
-The system is fundamentally UART-bandwidth-limited, not compute-limited. Constraining at 25 MHz ensures reliable timing closure without over-engineering the design. TimeQuest confirmed positive setup and hold slack at this constraint.
+UART keeps the BOM cost at zero — any CP2102 or CH340 USB-UART adapter works. The tradeoff is bandwidth.
 
 **Why Python for VCD generation?**
-VCD is a text-based format — Python handles the byte-to-sample reconstruction and file generation cleanly with no external dependencies. The script is self-contained and cross-platform.
+VCD is a text-based format — Python handles the byte-to-sample reconstruction and file generation with no external dependencies.
 
 ---
 
-## Timing Verification
+## Known Limitations / Not Yet Verified
 
-Timing closure verified using Quartus Prime TimeQuest Timing Analyzer:
-
-- **Clock:** 25 MHz (40 ns period)
-- **Setup slack:** Positive ✅
-- **Hold slack:** Positive ✅
-
-SDC constraint applied to the system clock domain. No unconstrained paths reported.
+- **No SDC constraint file or TimeQuest timing report is currently committed to this repo.** The 25MHz target reflects design intent based on UART bandwidth, not a closed/verified timing analysis. This is the top open item for the project.
+- The capture control logic is flag-based, not a formally encoded FSM — state encoding and transition diagrams are not yet documented.
+- No overflow/re-arm protection is implemented if the trigger condition isn't met before the write pointer wraps around.
+- Read-pointer offset logic (`rd_ptr <= wr_ptr + 1` at trigger) has not been independently verified against expected chronological ordering.
 
 ---
 
@@ -75,13 +68,13 @@ SDC constraint applied to the system clock domain. No unconstrained paths report
 
 ```
 ├── docs/
-│   ├── Waveform.png            # Output Waveform
+│   ├── waveform.png            # Output Waveform
 ├── python/
 │   └── capture.py              # UART capture + VCD generation script
 ├── rtl/
 │   |── logic_analyzer.v
 |   |── top.v                   # Top-level module
-|   |──uart_tx.v                # UART transmitter (8N1)
+|   |── uart_tx.v                # UART transmitter (8N1)
 └── README.md
 ```
 
@@ -98,8 +91,7 @@ SDC constraint applied to the system clock domain. No unconstrained paths report
 
 ### Host Capture
 ```bash
-
-python3 host/capture.py --port /dev/ttyUSB0 --baud 115200
+python3 python/capture.py --port /dev/ttyUSB0 --baud 115200
 gtkwave wave.vcd
 ```
 
@@ -107,17 +99,15 @@ gtkwave wave.vcd
 
 ## What This Project Demonstrates
 
-- **RTL Design** — Synthesizable Verilog with FSM, memory structures, and serial interface
-- **Timing Closure** — SDC constraints and TimeQuest analysis on a real device
+- **RTL Design** — Synthesizable Verilog with sequential control logic, memory structures, and a serial interface
 - **Hardware-Software Integration** — FPGA RTL interfacing with a Python host over physical UART
-- **System Thinking** — End-to-end design from signal capture to waveform visualization
-- **Debugging Real Hardware** — Tested on physical Cyclone IV board, not just simulation
+- **Debugging on Real Hardware** — Tested on a physical Cyclone IV board
 
 ---
 
 ## Motivation
 
-Commercial logic analyzers (SignalTap, Xilinx ILA) require tool-specific integration and consume FPGA fabric. This project implements an equivalent capture-and-stream architecture entirely in RTL — portable across any FPGA with a UART-capable pin, and fully open.
+Commercial logic analyzers (SignalTap, Xilinx ILA) require tool-specific integration and consume FPGA fabric. This project explores an equivalent capture-and-stream architecture in RTL, portable across any FPGA with a UART-capable pin.
 
 ---
 
@@ -126,7 +116,6 @@ Commercial logic analyzers (SignalTap, Xilinx ILA) require tool-specific integra
 | Tool | Purpose |
 |---|---|
 | Quartus Prime | Synthesis, P&R, Programming |
-| Timing Analyzer | Static Timing Analysis |
 | GTKWave | Waveform Visualization |
 | Python 3 | Host capture + VCD generation |
 | Icarus Verilog | RTL Simulation (pre-synthesis) |
