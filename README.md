@@ -101,7 +101,7 @@ gtkwave wave.vcd
 
 - **RTL Design** — Synthesizable Verilog with sequential control logic, memory structures, and a serial interface
 - **Hardware-Software Integration** — FPGA RTL interfacing with a Python host over physical UART
-- **Debugging on Real Hardware** — Tested on a physical Cyclone IV board
+- **Hardware Bring-Up (Partial)** — Design was synthesized and programmed onto a physical Cyclone IV board and UART communication with the host was exercised on-device. Timing closure was not verified (see Known Limitations) and the core buffer/trigger logic's correctness has not been independently confirmed on hardware — this project is not yet claimed as fully hardware-verified.
 
 ---
 
